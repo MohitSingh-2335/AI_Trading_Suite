@@ -1,2 +1,35 @@
-.venv
-.streamlit
+# Python junk files (auto-generated, never needed on GitHub)
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+
+# Virtual environments (each person makes their own)
+.venv/
+venv/
+env/
+stock_pred
+
+# Large data files (too big for GitHub, we fetch live data anyway)
+data/*.csv
+data/*.parquet
+
+# Trained model files (we retrain from scratch)
+models/*.pkl
+models/*.pt
+models/*.h5
+
+# Secrets (API keys - NEVER on GitHub)
+.streamlit/secrets.toml
+
+# Jupyter Notebook junk
+.ipynb_checkpoints/
+notebooks/.ipynb_checkpoints/
+
+# Operating System junk
+.DS_Store
+Thumbs.db
+
+# VS Code settings (personal, not project-related)
+.vscode/
