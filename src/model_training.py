@@ -8,8 +8,8 @@ from xgboost import XGBRegressor
 from sklearn.pipeline import make_pipeline
 import joblib
 import os
-from data_preprocessing import load_and_clean_data
-from feature_engineering import create_features
+from src.data_preprocessing import load_and_clean_data
+from src.feature_engineering import create_features
 
 def train_and_save_models(data_path, models_dir="models"):
     """
@@ -83,4 +83,4 @@ def train_and_save_models(data_path, models_dir="models"):
     print("\nTraining complete!")
 
 if __name__ == '__main__':
-    train_and_save_models(data_path='data/BTCUSDT-1h.csv')
+    train_and_save_models(data_path='data/BTCUSDT-1H.csv')
