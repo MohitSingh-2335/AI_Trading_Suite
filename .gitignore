@@ -33,3 +33,7 @@ Thumbs.db
 
 # VS Code settings (personal, not project-related)
 .vscode/
+
+#Extra code for learning purpose
+fetch_fresh_data.py
+find_best_model.py
