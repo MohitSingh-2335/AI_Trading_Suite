@@ -4,7 +4,7 @@ from src.data_preprocessing import load_and_clean_data
 from src.feature_engineering import create_features
 import os
 
-def preprocess_and_save_featured_data(input_path='data/BTCUSDT-1h.csv', output_path='data/featured_btc_data.csv'):
+def preprocess_and_save_featured_data(input_path='data/BTCUSDT-1H.csv', output_path='data/featured_btc_data.csv'):
     """
     Loads raw data, engineers all features, and saves the result to a new CSV file.
     """
