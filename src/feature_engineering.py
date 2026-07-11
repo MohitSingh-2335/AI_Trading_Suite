@@ -29,6 +29,13 @@ def create_features(df):
     # Target variables for prediction
     df['Target_Close'] = df['close'].shift(-1)
     df['Target_Movement'] = (df['close'].shift(-1) > df['close']).astype(int)
+    # Return-based target: percentage change to next hour's close, instead of
+    # the absolute price. Predicting absolute price lost to a do-nothing
+    # baseline in testing across every model tried (Linear/RF/XGBoost/SVR).
+    # Predicting the small change instead is the standard fix — it bakes in
+    # "price mostly persists, only adjust slightly" instead of hoping the
+    # model discovers that on its own.
+    df['Target_Return'] = df['close'].shift(-1) / df['close'] - 1
 
     # Volatility and return features
     window = 6
@@ -37,9 +44,15 @@ def create_features(df):
     df['vol_std_6h']  = df['vol_1h'].rolling(window).std()
     df['vol_max_6h']  = df['vol_1h'].rolling(window).max()
     df['vol_min_6h']  = df['vol_1h'].rolling(window).min()
-    df['return_1h'] = df['close'].pct_change().shift(-1)
-    df['return_mean_6h'] = df['return_1h'].rolling(window).mean()
-    df['return_std_6h'] = df['return_1h'].rolling(window).std()
+    # FIX: the old return_1h was computed with .shift(-1), making it a
+    # FORWARD-looking value (next hour's return — same sign as
+    # Target_Movement). The rolling mean/std below were built FROM that
+    # column, so they leaked next-hour's return into the current row's
+    # features. return_1h_lag below is backward-looking only (safe to use
+    # as a feature); nothing here looks past the current row anymore.
+    df['return_1h_lag'] = df['close'].pct_change()
+    df['return_mean_6h'] = df['return_1h_lag'].rolling(window).mean()
+    df['return_std_6h'] = df['return_1h_lag'].rolling(window).std()
 
     # Time-based and cyclical features
     df['hour'] = df['timestamp'].dt.hour
@@ -63,7 +76,18 @@ def create_features(df):
     df['close_lag_1'] = df['close'].shift(1)
     df['volume_lag_1'] = df['volume'].shift(1)
     df['price_volatility_interaction'] = df['close'] * df['Volatility']
-    
+
+    # Order-flow features — only added if the raw data has them (i.e. it came
+    # from fetch_fresh_data.py). Older-format CSVs without these columns will
+    # simply skip this block rather than crashing.
+    if 'taker_buy_ratio' in df.columns:
+        # Smoothed buy-vs-sell pressure trend, not just the current hour's
+        # noisy raw ratio
+        df['taker_buy_ratio_mean_6h'] = df['taker_buy_ratio'].rolling(window=6).mean()
+    if 'number_of_trades' in df.columns:
+        # Smoothed market-activity trend
+        df['trades_mean_6h'] = df['number_of_trades'].rolling(window=6).mean()
+
     # Drop rows with NaN values created by feature engineering
     df.dropna(inplace=True)
 

@@ -1,15 +1,18 @@
 # src/model_training.py
 
 import pandas as pd
-from sklearn.model_selection import train_test_split, RandomizedSearchCV
+from sklearn.model_selection import RandomizedSearchCV
 from sklearn.preprocessing import StandardScaler
 from sklearn.svm import SVC
+from sklearn.metrics import mean_squared_error, accuracy_score
 from xgboost import XGBRegressor
 from sklearn.pipeline import make_pipeline
 import joblib
 import os
+import numpy as np
 from src.data_preprocessing import load_and_clean_data
 from src.feature_engineering import create_features
+from config import XGB_FEATURES, SVC_FEATURES
 
 def train_and_save_models(data_path, models_dir="models"):
     """
@@ -23,15 +26,21 @@ def train_and_save_models(data_path, models_dir="models"):
     print("Features engineered.")
 
     # --- Regression Model Training (XGBoost) ---
-    X1 = df[[
-        'volume', 'Price Change', 'Rolling_Std_Close', 'vol_1h', 'vol_mean_6h',
-        'vol_std_6h', 'vol_max_6h', 'vol_min_6h', 'hour', 'dayofweek', 'day', 'rsi',
-        'high_low_ratio', 'hour_sin', 'hour_cos', 'day_sin', 'day_cos'
-    ]]
-    y1 = df['Target_Close']
-    X1_train, _, y1_train, _ = train_test_split(X1, y1, test_size=0.2, random_state=42)
+    # Predicting Target_Return (% change to next close) instead of
+    # Target_Close (absolute price). Every model tried on the absolute-price
+    # target lost to a do-nothing baseline (see find_best_models.py results)
+    # — this reframing is the fix, not just a tuning tweak.
+    X1 = df[XGB_FEATURES]
+    y1 = df['Target_Return']
 
-    print("Training XGBoost Regressor for price prediction...")
+    # Chronological split (NOT random) — data is time-ordered, so the last 20%
+    # of rows becomes the held-out test set. This avoids leaking information
+    # from "future" rows into training via rolling/lag features.
+    split_idx_1 = int(len(X1) * 0.8)
+    X1_train, X1_test = X1.iloc[:split_idx_1], X1.iloc[split_idx_1:]
+    y1_train, y1_test = y1.iloc[:split_idx_1], y1.iloc[split_idx_1:]
+
+    print("Training XGBoost Regressor for return prediction...")
     xgb_pipeline = make_pipeline(
         StandardScaler(),
         XGBRegressor(n_estimators=100, learning_rate=0.1, max_depth=5, random_state=42)
@@ -41,21 +50,43 @@ def train_and_save_models(data_path, models_dir="models"):
     joblib.dump(xgb_pipeline, os.path.join(models_dir, 'best_xgb_model.pkl'))
     print("✅ XGBoost Regressor model saved.")
 
+    # --- Evaluate on the held-out (chronologically later) test set ---
+    # Report RMSE in PRICE terms (not raw return terms) by reconstructing the
+    # implied price from each predicted return, so this stays comparable to
+    # the RMSE numbers you've already seen.
+    y1_pred_return = xgb_pipeline.predict(X1_test)
+    current_close_test = df['close'].iloc[split_idx_1:]
+    actual_price_test = df['Target_Close'].iloc[split_idx_1:]
+    predicted_price_test = current_close_test * (1 + y1_pred_return)
+
+    rmse = np.sqrt(mean_squared_error(actual_price_test, predicted_price_test))
+    print(f"📊 XGBoost Regressor — Test RMSE, price-equivalent (chronological holdout): {rmse:.4f}")
+
+    # --- Naive baseline: "next hour's close = this hour's close" (no model at all) ---
+    naive_baseline_pred = current_close_test
+    baseline_rmse = np.sqrt(mean_squared_error(actual_price_test, naive_baseline_pred))
+    print(f"📊 Naive Baseline (persistence) — Test RMSE: {baseline_rmse:.4f}")
+    if rmse < baseline_rmse:
+        print(f"   ✅ Model beats the naive baseline (lower RMSE by {baseline_rmse - rmse:.4f}).")
+    else:
+        print(f"   ⚠️  Model does NOT beat the naive baseline (higher RMSE by {rmse - baseline_rmse:.4f}).")
+
     # --- Classification Model Training (SVC) ---
-    X2 = df[['volume', 'Price Change', 'Volatility', 'Rolling_Mean_Close', 'Rolling_Std_Close',
-         'vol_mean_6h', 'vol_std_6h', 'vol_max_6h', 'vol_min_6h', 'return_mean_6h',
-         'return_std_6h', 'hour', 'dayofweek', 'day', 'rsi', 'macd', 'bb_high',
-         'bb_low', 'ema_10', 'ema_30', 'high_low_ratio', 'close_open_diff',
-         'close_lag_1', 'volume_lag_1', 'rolling_max_6h', 'rolling_min_6h',
-         'price_volatility_interaction', 'hour_sin', 'hour_cos', 'day_sin',
-         'day_cos']]
+    X2 = df[SVC_FEATURES]
     y2 = df['Target_Movement']
-    X2_train, _, y2_train, _ = train_test_split(X2, y2, test_size=0.2, random_state=42, stratify=y2)
+
+    # Chronological split here too — same reasoning as above. Note: no more
+    # `stratify=y2`, since stratification only makes sense for a random
+    # sample; it doesn't apply to a fixed chronological cut.
+    split_idx_2 = int(len(X2) * 0.8)
+    X2_train, X2_test = X2.iloc[:split_idx_2], X2.iloc[split_idx_2:]
+    y2_train, y2_test = y2.iloc[:split_idx_2], y2.iloc[split_idx_2:]
 
     print("Training SVC for movement prediction...")
     # Scale the features for SVC
     scaler = StandardScaler()
     X2_train_scaled = scaler.fit_transform(X2_train)
+    X2_test_scaled = scaler.transform(X2_test)  # use train-fit scaler, don't refit on test
 
     # Define parameter grid for RandomizedSearch based on your notebook
     svc_param_grid = {
@@ -80,7 +111,26 @@ def train_and_save_models(data_path, models_dir="models"):
     joblib.dump(best_svc, os.path.join(models_dir, 'best_svc_model.pkl'))
     joblib.dump(scaler, os.path.join(models_dir, 'scaler.pkl')) # Save the scaler used for SVC
     print("✅ Best SVC model and scaler saved.")
+
+    # --- Evaluate on the held-out (chronologically later) test set ---
+    y2_pred = best_svc.predict(X2_test_scaled)
+    acc = accuracy_score(y2_test, y2_pred)
+    print(f"📊 SVC — Test Accuracy (chronological holdout): {acc:.4f}")
+
+    # --- Naive baseline: always predict whichever class was most common in TRAINING data ---
+    # (using training distribution, not test, so the baseline itself doesn't peek at test labels)
+    majority_class = y2_train.mode()[0]
+    baseline_preds = pd.Series(majority_class, index=y2_test.index)
+    baseline_acc = accuracy_score(y2_test, baseline_preds)
+    print(f"📊 Naive Baseline (always predict '{majority_class}') — Test Accuracy: {baseline_acc:.4f}")
+    if acc > baseline_acc:
+        print(f"   ✅ Model beats the naive baseline by {(acc - baseline_acc) * 100:.2f} percentage points.")
+    else:
+        print(f"   ⚠️  Model does NOT clearly beat the naive baseline (diff: {(acc - baseline_acc) * 100:.2f} points).")
+
     print("\nTraining complete!")
+    print("\n⚠️  These are the first metrics measured on a correct, non-leaky split.")
+    print("    Any numbers you saw before this fix should be treated as invalid.")
 
 if __name__ == '__main__':
     train_and_save_models(data_path='data/BTCUSDT-1H.csv')
