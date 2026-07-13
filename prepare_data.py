@@ -2,6 +2,7 @@
 
 from src.data_preprocessing import load_and_clean_data
 from src.feature_engineering import create_features
+from src.agents.fear_greed_agent import merge_fear_greed
 import os
 
 def preprocess_and_save_featured_data(input_path='data/BTCUSDT-1H.csv', output_path='data/featured_btc_data.csv'):
@@ -12,6 +13,8 @@ def preprocess_and_save_featured_data(input_path='data/BTCUSDT-1H.csv', output_p
 
     # Load and clean the initial data
     df = load_and_clean_data(input_path)
+
+    df = merge_fear_greed(df, timestamp_col='timestamp')
     
     # Engineer all features
     featured_df = create_features(df)
