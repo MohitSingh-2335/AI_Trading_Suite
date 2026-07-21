@@ -6,7 +6,8 @@ from src.backtesting import (
 )
 from config import SVC_FEATURES
 
-df = create_features(load_and_clean_data('data/BTCUSDT-1H.csv')).reset_index(drop=True)
+from src.agents.fear_greed_agent import merge_fear_greed
+df = create_features(merge_fear_greed(load_and_clean_data('data/BTCUSDT-1H.csv'))).reset_index(drop=True)
 split_idx = int(len(df) * 0.8)
 test_df = df.iloc[split_idx:].reset_index(drop=True)
 model, scaler = train_classifier(df, split_idx)
