@@ -13,6 +13,7 @@ import numpy as np
 from src.data_preprocessing import load_and_clean_data
 from src.feature_engineering import create_features
 from config import XGB_FEATURES, SVC_FEATURES
+from src.agents.fear_greed_agent import merge_fear_greed
 
 def train_and_save_models(data_path, models_dir="models"):
     """
@@ -22,6 +23,7 @@ def train_and_save_models(data_path, models_dir="models"):
     print("Starting model training process...")
     df = load_and_clean_data(data_path)
     print("Data loaded and cleaned.")
+    df = merge_fear_greed(df, timestamp_col='timestamp')
     df = create_features(df)
     print("Features engineered.")
 
