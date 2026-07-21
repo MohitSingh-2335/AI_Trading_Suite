@@ -87,6 +87,20 @@ def create_features(df):
     if 'number_of_trades' in df.columns:
         # Smoothed market-activity trend
         df['trades_mean_6h'] = df['number_of_trades'].rolling(window=6).mean()
+    if 'fng_value' in df.columns:
+        df['fng_mean_3d'] = df['fng_value'].rolling(window=72).mean()
+
+    # On-chain metrics — daily values broadcast from merge_onchain(). Using
+    # day-over-day % change rather than raw level: raw level is highly
+    # autocorrelated/non-stationary (hash rate trends up for years), so
+    # change is more likely to carry hourly-relevant signal. Same
+    # daily-into-hourly granularity caveat as fng_value applies here too.
+    if 'onchain_num_tx' in df.columns:
+        df['onchain_num_tx_change'] = df['onchain_num_tx'].pct_change()
+    if 'onchain_hash_rate' in df.columns:
+        df['onchain_hash_rate_change'] = df['onchain_hash_rate'].pct_change()
+    if 'onchain_miners_revenue_usd' in df.columns:
+        df['onchain_miners_revenue_change'] = df['onchain_miners_revenue_usd'].pct_change()
 
     # Drop rows with NaN values created by feature engineering
     df.dropna(inplace=True)
