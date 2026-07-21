@@ -4,10 +4,12 @@ from src.backtesting import (
     train_classifier, run_backtest, compute_metrics,
     load_and_clean_data, create_features
 )
+from src.agents.fear_greed_agent import merge_fear_greed
+from src.agents.onchain_agent import merge_onchain
 from config import SVC_FEATURES
 
 from src.agents.fear_greed_agent import merge_fear_greed
-df = create_features(merge_fear_greed(load_and_clean_data('data/BTCUSDT-1H.csv'))).reset_index(drop=True)
+df = create_features(merge_onchain(merge_fear_greed(load_and_clean_data('data/BTCUSDT-1H.csv')))).reset_index(drop=True)
 split_idx = int(len(df) * 0.8)
 test_df = df.iloc[split_idx:].reset_index(drop=True)
 model, scaler = train_classifier(df, split_idx)
