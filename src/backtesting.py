@@ -12,6 +12,7 @@ from sklearn.linear_model import LogisticRegression
 
 from src.data_preprocessing import load_and_clean_data
 from src.feature_engineering import create_features
+from src.agents.onchain_agent import merge_onchain
 from config import SVC_FEATURES
 from src.agents.fear_greed_agent import merge_fear_greed
 
@@ -106,7 +107,7 @@ def compute_metrics(equity_curve_df, trade_log_df, test_df):
 
 def main(threshold=0.5):
     print("Loading data and training classifier...")
-    df = create_features(merge_fear_greed(load_and_clean_data('data/BTCUSDT-1H.csv'))).reset_index(drop=True)
+    df = create_features(merge_onchain(merge_fear_greed(load_and_clean_data('data/BTCUSDT-1H.csv')))).reset_index(drop=True)
     split_idx = int(len(df) * 0.8)
     test_df = df.iloc[split_idx:].reset_index(drop=True)
 
